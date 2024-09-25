@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leistungs Chart</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+
+        .chart-container {
+            width: 80%;
+            max-width: 2000px;
+        }
+
+        .year-selector {
+            margin-bottom: 20px;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="year-selector">
+        <label for="year">Energie-Bilanz Jahr: </label>
+        <select id="year" onchange="createChart()"></select>
+    </div>
+    <div class="chart-container">
+        <canvas id="leistungChart"></canvas>
+    </div>
+    <div id="error-message" style="color: red; display: none;"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <script>
+        let leistungChart;
+
+        function populateYearOptions() {
+            const select = document.getElementById('year');
+            const currentYear = new Date().getFullYear();
+            const startYear = currentYear - 5;
+
+            for (let year = startYear; year <= currentYear; year++) {
+                const option = document.createElement('option');
+                const yearString = String(year);
+                const yearValue = String(year).slice(-2);
+                option.value = yearValue;
+                option.textContent = yearString;
+                if (year === currentYear) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+        }
+
+        async function fetchData(year) {
+            const errorMessage = document.getElementById('error-message');
+            try {
+                const response = await fetch(`http://192.168.xxx.xxx/chart.jsn?chd=1&chm=1&chy=${year}&chpl=12&cht=2&cha=0&chp1=3&chp2=4`);
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const data = await response.json();
+                errorMessage.style.display = 'none'; // Hide error message if fetch is successful
+                return data;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                errorMessage.textContent = 'Error fetching data.';
+                errorMessage.style.display = 'block'; // Show error message
+                return null;
+            }
+        }
+
+        async function createChart() {
+            const year = document.getElementById('year').value;
+            const data = await fetchData(year);
+            if (!data) return;
+
+            const leistungString = data["3"];
+            const leistung = leistungString.split(',').map(Number).filter(n => !isNaN(n));
+
+            const netzLeistungString = data["4"];
+            const netzLeistung = netzLeistungString.split(',').map(Number).filter(n => !isNaN(n));
+
+            const ctx = document.getElementById('leistungChart').getContext('2d');
+
+            if (leistungChart) {
+                leistungChart.destroy();
+            }
+
+            leistungChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
+                    datasets: [
+                        {
+                            label: 'PV-Leistung',
+                            data: leistung,
+                            backgroundColor: 'rgba(0, 128, 0, 0.6)',
+                            borderColor: 'rgba(0, 128, 0, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Netz-Leistung',
+                            data: netzLeistung,
+                            backgroundColor: 'rgba(130, 130, 0, 0.6)',
+                            borderColor: 'rgba(255, 255, 0, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    plugins: {
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'end',
+                            formatter: (value) => value,
+                            color: 'black',
+                            font: {
+                                weight: 'bold',
+                                size: 14
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function (value) {
+                                    return `${value} kWh`;
+                                },
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels]
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateYearOptions();
+            createChart();
+        });
+    </script>
+</body>
+
+</html>
